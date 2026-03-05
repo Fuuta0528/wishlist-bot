@@ -1,128 +1,139 @@
 import requests
 from bs4 import BeautifulSoup
 import time
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 
-WEBHOOK = "https://discord.com/api/webhooks/1479095180953911469/UTGcnHjBtpOt-mErqPGlB-X0nQkbwzItuXOEr_C1LNtzq4UO_OqxGQBlbhGktRHUAIVR"
-
-AMAZON_URL = "https://www.amazon.co.jp/hz/wishlist/ls/2HA24VTBOPMGR?ref_=wl_fv_le"
+# ===== 設定 =====
+AMAZON_URL = "https://www.amazon.co.jp/hz/wishlist/ls/2HA24VTBOPMGR"
 GIPT_URL = "https://gi-pt.com/main/wishlist/fan-view/3a1f1c99-440f-ad66-d107-1ed83a03c5cf"
 
-known_items = set()
+DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1479095180953911469/UTGcnHjBtpOt-mErqPGlB-X0nQkbwzItuXOEr_C1LNtzq4UO_OqxGQBlbhGktRHUAIVR"
+
+CHECK_INTERVAL = 300  # 5分
+
+headers = {
+    "User-Agent": "Mozilla/5.0"
+}
+
+seen_items = set()
 
 
-def send_discord(title, url, image):
+# ======================
+# Discord通知
+# ======================
+
+def send_discord(title, link):
 
     data = {
-        "embeds": [
-            {
-                "title": title,
-                "url": url,
-                "image": {"url": image}
-            }
-        ]
+        "content": f"🎁 **Wishlist追加**\n{title}\n{link}"
     }
 
-    requests.post(WEBHOOK, json=data)
+    requests.post(DISCORD_WEBHOOK, json=data)
 
+
+# ======================
+# Amazonチェック
+# ======================
 
 def check_amazon():
 
-    headers = {
-        "User-Agent": "Mozilla/5.0"
-    }
+    try:
 
-    r = requests.get(AMAZON_URL, headers=headers)
-    soup = BeautifulSoup(r.text, "html.parser")
+        r = requests.get(AMAZON_URL, headers=headers)
+        soup = BeautifulSoup(r.text, "html.parser")
 
-    items = soup.select("img")
+        items = soup.select("div.g-item-sortable")
 
-    for i in items:
+        results = []
 
-        title = i.get("alt")
-        image = i.get("src")
+        for item in items:
 
-        if not title or not image:
-            continue
+            title_tag = item.select_one("h2 a")
 
-        # Amazon商品画像だけ通す
-        if "images-na.ssl-images-amazon.com" not in image:
-            continue
+            if not title_tag:
+                continue
 
-        # 広告除外
-        if "Amazon" in title or "プライム" in title or "読み放題" in title:
-            continue
+            title = title_tag.text.strip()
 
-        if title not in known_items:
+            # 不要通知除外
+            if "プライム会員" in title:
+                continue
 
-            known_items.add(title)
+            if "Amazon Mastercard" in title:
+                continue
 
-            print("Amazon追加:", title)
+            link = "https://www.amazon.co.jp" + title_tag["href"]
 
-            send_discord(
-                f"🎁 Amazon Wishlist追加\n{title}",
-                AMAZON_URL,
-                image
-            )
+            results.append((title, link))
 
+        return results
+
+    except Exception as e:
+        print("Amazon error:", e)
+        return []
+
+
+# ======================
+# GIPTチェック
+# ======================
 
 def check_gipt():
 
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--no-sandbox")
-    options.add_argument("--disable-dev-shm-usage")
+    try:
 
-    driver = webdriver.Chrome(options=options)
+        r = requests.get(GIPT_URL, headers=headers)
+        soup = BeautifulSoup(r.text, "html.parser")
 
-    driver.get(GIPT_URL)
+        items = soup.select("a")
 
-    time.sleep(5)
+        results = []
 
-    soup = BeautifulSoup(driver.page_source, "html.parser")
+        for item in items:
 
-    items = soup.select("img")
+            title = item.text.strip()
 
-    for i in items:
+            if len(title) < 8:
+                continue
 
-        image = i.get("src")
+            link = item.get("href")
 
-        if not image:
-            continue
+            if not link:
+                continue
 
-        # Gi-ptの商品画像だけ
-        if "product" not in image:
-            continue
+            if "http" not in link:
+                continue
 
-        title = image.split("/")[-1]
+            results.append((title, link))
 
-        if title not in known_items:
+        return results
 
-            known_items.add(title)
-
-            print("Gi-pt追加:", title)
-
-            send_discord(
-                f"🎁 Gi-pt Wishlist追加",
-                GIPT_URL,
-                image
-            )
-
-    driver.quit()
+    except Exception as e:
+        print("GIPT error:", e)
+        return []
 
 
-print("BOT起動")
+# ======================
+# メイン監視
+# ======================
 
 while True:
 
-    try:
+    print("チェック開始")
 
-        check_amazon()
-        check_gipt()
+    amazon_items = check_amazon()
+    gipt_items = check_gipt()
 
-    except Exception as e:
+    all_items = amazon_items + gipt_items
 
-        print("エラー:", e)
+    for title, link in all_items:
 
-    time.sleep(60)
+        uid = title + link
+
+        if uid not in seen_items:
+
+            seen_items.add(uid)
+
+            print("新規:", title)
+
+            send_discord(title, link)
+
+    time.sleep(CHECK_INTERVAL)
