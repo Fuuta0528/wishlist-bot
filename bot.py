@@ -9,11 +9,7 @@ GIPT_URL = "https://gi-pt.com/main/wishlist/fan-view/3a1f1c99-440f-ad66-d107-1ed
 
 WEBHOOK = "https://discord.com/api/webhooks/1479095180953911469/UTGcnHjBtpOt-mErqPGlB-X0nQkbwzItuXOEr_C1LNtzq4UO_OqxGQBlbhGktRHUAIVR"
 
-CHECK_INTERVAL = 120  # 秒
-
-headers = {
-    "User-Agent": "Mozilla/5.0"
-}
+headers = {"User-Agent": "Mozilla/5.0"}
 
 seen_items = set()
 
@@ -32,11 +28,7 @@ def send_discord(title, link, image):
     if image:
         embed["image"] = {"url": image}
 
-    data = {
-        "embeds": [embed]
-    }
-
-    requests.post(WEBHOOK, json=data)
+    requests.post(WEBHOOK, json={"embeds": [embed]})
 
 
 # ======================
@@ -80,7 +72,7 @@ def check_amazon():
 
 
 # ======================
-# GIPT取得（使わないなら消してOK）
+# GIPT取得
 # ======================
 
 def check_gipt():
@@ -136,4 +128,4 @@ while True:
     except Exception as e:
         print("error:", e)
 
-    time.sleep(CHECK_INTERVAL)
+    time.sleep(120)
