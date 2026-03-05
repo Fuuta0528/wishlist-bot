@@ -23,7 +23,7 @@ def check():
         r = requests.get(url, headers={"User-Agent":"Mozilla/5.0"})
         soup = BeautifulSoup(r.text,"html.parser")
 
-        items = soup.find_all("img")
+        items = soup.find_all(["img","a","h2","h3"])
 
         for i in items:
             name = i.get("alt")
