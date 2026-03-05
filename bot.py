@@ -4,37 +4,35 @@ import time
 
 WEBHOOK = "https://discord.com/api/webhooks/1479095180953911469/UTGcnHjBtpOt-mErqPGlB-X0nQkbwzItuXOEr_C1LNtzq4UO_OqxGQBlbhGktRHUAIVR"
 
-amazon_url = "https://www.amazon.co.jp/hz/wishlist/ls/2HA24VTBOPMGR"
+amazon_url = "https://www.amazon.co.jp/hz/wishlist/ls/2HA24VTBOPMGR?ref_=wl_fv_le"
 gipt_url = "https://gi-pt.com/main/wishlist/fan-view/3a1f1c99-440f-ad66-d107-1ed83a03c5cf"
+
+headers = {
+    "User-Agent":"Mozilla/5.0"
+}
 
 seen = set()
 
-headers = {
-    "User-Agent": "Mozilla/5.0"
-}
-
-def send_discord(title, name, url, img):
+def send_discord(title,name,url,img):
 
     data = {
-        "embeds": [
+        "embeds":[
             {
-                "title": title,
-                "description": name,
-                "url": url,
-                "image": {
-                    "url": img
-                }
+                "title":title,
+                "description":name,
+                "url":url,
+                "image":{"url":img}
             }
         ]
     }
 
-    requests.post(WEBHOOK, json=data)
+    requests.post(WEBHOOK,json=data)
 
 
 def check_amazon():
 
-    r = requests.get(amazon_url, headers=headers)
-    soup = BeautifulSoup(r.text, "html.parser")
+    r = requests.get(amazon_url,headers=headers)
+    soup = BeautifulSoup(r.text,"html.parser")
 
     items = soup.select("img")
 
@@ -46,65 +44,65 @@ def check_amazon():
         if not name:
             continue
 
-        # Amazon広告排除
+        # Amazonの余計な画像を除外
         ng = [
-            "Amazon",
-            "Prime",
-            "Mastercard",
-            "スポンサー",
-            "おすすめ",
-            "広告",
-            "Audible"
+        "Amazon",
+        "広告",
+        "おすすめ",
+        "Prime",
+        "Audible",
+        "Mastercard",
+        "サインイン"
         ]
 
-        if any(word in name for word in ng):
+        if any(x in name for x in ng):
             continue
 
-        if name not in seen:
-
-            seen.add(name)
-
-            send_discord(
-                "🎁 Amazon Wishlist追加",
-                name,
-                amazon_url,
-                img
-            )
-
-
-def check_gipt():
-
-    r = requests.get(gipt_url, headers=headers)
-    soup = BeautifulSoup(r.text, "html.parser")
-
-    items = soup.find_all("img")
-
-    for i in items:
-
-        img = i.get("src")
-        name = i.get("alt")
-
-        if not img:
-            continue
-
-        # Gi-ptの商品画像だけ検出
-        if "wishlist" not in img and "product" not in img:
-            continue
-
-        if not name:
-            name = "Gi-pt Wishlist商品"
-
-        key = img
+        key = "amazon"+name
 
         if key not in seen:
 
             seen.add(key)
 
             send_discord(
-                "🎁 Gi-pt Wishlist追加",
-                name,
-                gipt_url,
-                img
+            "🎁 Amazon Wishlist追加",
+            name,
+            amazon_url,
+            img
+            )
+
+
+def check_gipt():
+
+    r = requests.get(gipt_url,headers=headers)
+    soup = BeautifulSoup(r.text,"html.parser")
+
+    items = soup.select("img")
+
+    for i in items:
+
+        img = i.get("src")
+
+        if not img:
+            continue
+
+        # Gi-pt商品画像だけ
+        if "wishlist" not in img and "product" not in img:
+            continue
+
+        name = "Gi-pt Wishlist商品"
+
+        key = "gipt"+img
+
+        if key not in seen:
+
+            seen.add(key)
+
+            send_discord(
+            "🎁 Gi-pt Wishlist追加",
+            name,
+            gipt_url,
+            img
             )
 
 
@@ -116,6 +114,7 @@ while True:
         check_gipt()
 
     except Exception as e:
-        print("error:", e)
+
+        print("error",e)
 
     time.sleep(60)
