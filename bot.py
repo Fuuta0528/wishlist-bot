@@ -9,42 +9,104 @@ gipt_url = "https://gi-pt.com/main/wishlist/fan-view/3a1f1c99-440f-ad66-d107-1ed
 
 seen = set()
 
-def send(msg):
-    requests.post(WEBHOOK, json={"content": msg})
+headers = {
+    "User-Agent": "Mozilla/5.0"
+}
+
+def send_discord(title, name, url, img):
+
+    data = {
+        "embeds": [
+            {
+                "title": title,
+                "description": name,
+                "url": url,
+                "image": {
+                    "url": img
+                }
+            }
+        ]
+    }
+
+    requests.post(WEBHOOK, json=data)
+
 
 def check_amazon():
-    r = requests.get(amazon_url, headers={"User-Agent":"Mozilla/5.0"})
-    soup = BeautifulSoup(r.text,"html.parser")
+
+    r = requests.get(amazon_url, headers=headers)
+    soup = BeautifulSoup(r.text, "html.parser")
 
     items = soup.select("img")
 
     for i in items:
+
         name = i.get("alt")
         img = i.get("src")
 
-        if name and name not in seen and "Amazon" not in name:
+        if not name:
+            continue
+
+        # Amazon広告排除
+        ng = [
+            "Amazon",
+            "Prime",
+            "Mastercard",
+            "スポンサー",
+            "おすすめ",
+            "広告",
+            "Audible"
+        ]
+
+        if any(word in name for word in ng):
+            continue
+
+        if name not in seen:
+
             seen.add(name)
 
-            msg = f"🎁 Amazon Wishlist追加！\n{name}\n{amazon_url}\n{img}"
-            send(msg)
+            send_discord(
+                "🎁 Amazon Wishlist追加",
+                name,
+                amazon_url,
+                img
+            )
+
 
 def check_gipt():
-    r = requests.get(gipt_url, headers={"User-Agent":"Mozilla/5.0"})
-    soup = BeautifulSoup(r.text,"html.parser")
+
+    r = requests.get(gipt_url, headers=headers)
+    soup = BeautifulSoup(r.text, "html.parser")
 
     items = soup.select("img")
 
     for i in items:
+
         name = i.get("alt")
         img = i.get("src")
 
-        if name and name not in seen:
+        if not name:
+            continue
+
+        if name not in seen:
+
             seen.add(name)
 
-            msg = f"🎁 Gi-pt Wishlist追加！\n{name}\n{gipt_url}\n{img}"
-            send(msg)
+            send_discord(
+                "🎁 Gi-pt Wishlist追加",
+                name,
+                gipt_url,
+                img
+            )
+
 
 while True:
-    check_amazon()
-    check_gipt()
+
+    try:
+
+        check_amazon()
+        check_gipt()
+
+    except Exception as e:
+        print("error:", e)
+
     time.sleep(60)
