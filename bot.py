@@ -4,7 +4,7 @@ import time
 
 # ===== 設定 =====
 
-AMAZON_URL = "https://www.amazon.co.jp/hz/wishlist/ls/2HA24VTBOPMGR"
+AMAZON_URL = "https://www.amazon.co.jp/hz/wishlist/ls/2ZMD47F7CBZ29"
 GIPT_URL = "https://gi-pt.com/main/wishlist/fan-view/3a1f1c99-440f-ad66-d107-1ed83a03c5cf"
 
 WEBHOOK = "https://discord.com/api/webhooks/1479095180953911469/UTGcnHjBtpOt-mErqPGlB-X0nQkbwzItuXOEr_C1LNtzq4UO_OqxGQBlbhGktRHUAIVR"
