@@ -4,7 +4,7 @@ import time
 
 WEBHOOK = "https://discord.com/api/webhooks/1479095180953911469/UTGcnHjBtpOt-mErqPGlB-X0nQkbwzItuXOEr_C1LNtzq4UO_OqxGQBlbhGktRHUAIVR"
 
-amazon_url = "https://www.amazon.co.jp/hz/wishlist/ls/2ZMD47F7CBZ29"
+amazon_url = "https://www.amazon.co.jp/hz/wishlist/ls/2HA24VTBOPMGR"
 gipt_url = "https://gi-pt.com/main/wishlist/fan-view/3a1f1c99-440f-ad66-d107-1ed83a03c5cf"
 
 seen = set()
@@ -77,19 +77,28 @@ def check_gipt():
     r = requests.get(gipt_url, headers=headers)
     soup = BeautifulSoup(r.text, "html.parser")
 
-    items = soup.select("img")
+    items = soup.find_all("img")
 
     for i in items:
 
-        name = i.get("alt")
         img = i.get("src")
+        name = i.get("alt")
 
-        if not name:
+        if not img:
             continue
 
-        if name not in seen:
+        # Gi-ptの商品画像だけ検出
+        if "wishlist" not in img and "product" not in img:
+            continue
 
-            seen.add(name)
+        if not name:
+            name = "Gi-pt Wishlist商品"
+
+        key = img
+
+        if key not in seen:
+
+            seen.add(key)
 
             send_discord(
                 "🎁 Gi-pt Wishlist追加",
