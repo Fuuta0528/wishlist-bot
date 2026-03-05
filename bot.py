@@ -1,52 +1,116 @@
 import requests
 from bs4 import BeautifulSoup
 import time
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
 
-# Discord Webhook URL
 WEBHOOK = "https://discord.com/api/webhooks/1479095180953911469/UTGcnHjBtpOt-mErqPGlB-X0nQkbwzItuXOEr_C1LNtzq4UO_OqxGQBlbhGktRHUAIVR"
 
-# 監視するURL
-amazon_url = "https://www.amazon.co.jp/hz/wishlist/ls/2HA24VTBOPMGR"
-gipt_url = "https://gi-pt.com/main/wishlist/fan-view/3a1f1c99-440f-ad66-d107-1ed83a03c5cf"
+AMAZON_URL = "https://www.amazon.co.jp/hz/wishlist/ls/2HA24VTBOPMGR?ref_=wl_fv_le"
+GIPT_URL = "https://gi-pt.com/main/wishlist/fan-view/3a1f1c99-440f-ad66-d107-1ed83a03c5cf"
 
-seen = set()
+known_items = set()
 
-def send(msg):
-    requests.post(WEBHOOK, json={"content": msg})
+
+def send_discord(title, url, image):
+    data = {
+        "embeds": [
+            {
+                "title": title,
+                "url": url,
+                "image": {"url": image}
+            }
+        ]
+    }
+
+    requests.post(WEBHOOK, json=data)
+
 
 def check_amazon():
-    r = requests.get(amazon_url, headers={"User-Agent":"Mozilla/5.0"})
-    soup = BeautifulSoup(r.text,"html.parser")
+
+    headers = {
+        "User-Agent": "Mozilla/5.0"
+    }
+
+    r = requests.get(AMAZON_URL, headers=headers)
+    soup = BeautifulSoup(r.text, "html.parser")
 
     items = soup.select("img")
 
     for i in items:
-        name = i.get("alt")
-        img = i.get("src")
 
-        if name and name not in seen and "Amazon" not in name:
-            seen.add(name)
+        title = i.get("alt")
+        image = i.get("src")
 
-            msg = f"🎁 Amazon Wishlist追加！\n{name}\n{amazon_url}\n{img}"
-            send(msg)
+        if not title:
+            continue
+
+        if title not in known_items:
+
+            known_items.add(title)
+
+            print("Amazon追加:", title)
+
+            send_discord(
+                "Amazon wishlist追加",
+                AMAZON_URL,
+                image
+            )
+
 
 def check_gipt():
-    r = requests.get(gipt_url, headers={"User-Agent":"Mozilla/5.0"})
-    soup = BeautifulSoup(r.text,"html.parser")
+
+    options = Options()
+    options.add_argument("--headless")
+
+    driver = webdriver.Chrome(options=options)
+
+    driver.get(GIPT_URL)
+
+    time.sleep(5)
+
+    soup = BeautifulSoup(driver.page_source, "html.parser")
 
     items = soup.select("img")
 
     for i in items:
-        name = i.get("alt")
-        img = i.get("src")
 
-        if name and name not in seen:
-            seen.add(name)
+        image = i.get("src")
 
-            msg = f"🎁 Gi-pt Wishlist追加！\n{name}\n{gipt_url}\n{img}"
-            send(msg)
+        if not image:
+            continue
+
+        if "product" not in image:
+            continue
+
+        title = image.split("/")[-1]
+
+        if title not in known_items:
+
+            known_items.add(title)
+
+            print("Gi-pt追加:", title)
+
+            send_discord(
+                "Gi-pt wishlist追加",
+                GIPT_URL,
+                image
+            )
+
+    driver.quit()
+
+
+print("BOT起動")
 
 while True:
-    check_amazon()
-    check_gipt()
+
+    try:
+
+        check_amazon()
+        check_gipt()
+
+    except Exception as e:
+
+        print("エラー:", e)
+
     time.sleep(60)
