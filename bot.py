@@ -129,3 +129,5 @@ while True:
         print("error:", e)
 
     time.sleep(120)
+    print(check_amazon())
+print(check_gipt())
