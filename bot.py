@@ -3,65 +3,71 @@ import time
 from bs4 import BeautifulSoup
 
 WEBHOOK = "https://discord.com/api/webhooks/1479095180953911469/UTGcnHjBtpOt-mErqPGlB-X0nQkbwzItuXOEr_C1LNtzq4UO_OqxGQBlbhGktRHUAIVR"
-AMAZON_URL = "https://www.amazon.co.jp/hz/wishlist/ls/2HA24VTBOPMGR"
 
-seen = set()
+amazon_url = "https://www.amazon.co.jp/hz/wishlist/ls/2HA24VTBOPMGR?ref_=wl_fv_le"
+
 headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    "User-Agent": "Mozilla/5.0"
 }
 
-def send_discord(name, img):
+seen = set()
+
+def send_discord(title, name, url, img):
+
     data = {
         "embeds": [
             {
-                "title": " 🎁なるる追加",
+                "title": title,
                 "description": name,
-                "url": AMAZON_URL,
-                "color": 16750848,
-                "image": {"url": img} if img else {}
+                "url": url,
+                "image": {"url": img}
             }
         ]
     }
+
     requests.post(WEBHOOK, json=data)
 
+
 def check_amazon():
-    print(f"チェック中... ({time.strftime('%H:%M:%S')})")
+
+    r = requests.get(amazon_url, headers=headers)
+    soup = BeautifulSoup(r.text, "html.parser")
+
+    items = soup.select(".g-item-sortable")
+
+    for i in items:
+
+        name_tag = i.select_one("h2")
+        img_tag = i.select_one("img")
+
+        if not img_tag:
+            continue
+
+        img = img_tag.get("src")
+        name = name_tag.text.strip() if name_tag else "Amazon Wishlist商品"
+
+        key = img
+
+        if key not in seen:
+
+            seen.add(key)
+
+            send_discord(
+                "🎁なるるwishlist",
+                name,
+                amazon_url,
+                img
+            )
+
+
+while True:
+
     try:
-        r = requests.get(AMAZON_URL, headers=headers, timeout=15)
-        soup = BeautifulSoup(r.text, "html.parser")
-        items = soup.find_all("img")
 
-        for i in items:
-            name = i.get("alt")
-            img = i.get("src")
-
-            if not name:
-                continue
-
-            # --- 【ここを強化！】除外したいキーワードを追加 ---
-            ng_words = [
-                "Amazon", "Prime", "Mastercard", "スポンサー", "広告", "Audible",
-                "切り替え", "その他", "ビュー", "プロフィール", "ギフト設定",
-                "保存済み", "削除", "シェア", "フィルター", "並べ替え"
-            ]
-            
-            # もし名前の中にNGワードが1つでも入っていたら無視する
-            if any(word in name for word in ng_words):
-                continue
-            
-            # 文字数が極端に短いものもボタンの可能性が高いので無視（例：「次へ」など）
-            if len(name) <= 3:
-                continue
-
-            if name not in seen:
-                seen.add(name)
-                print(f"【新着検知】: {name}")
-                send_discord(name, img)
+        check_amazon()
+        check_gipt()
 
     except Exception as e:
-        print(f"エラー: {e}")
+        print("error:", e)
 
-print("Amazon監視スタート！")
-while True:
-    check_amazon()
-    time.sleep(300) # 5分おき
+    time.sleep(60)
