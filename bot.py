@@ -13,6 +13,7 @@ known_items = set()
 
 
 def send_discord(title, url, image):
+
     data = {
         "embeds": [
             {
@@ -42,7 +43,15 @@ def check_amazon():
         title = i.get("alt")
         image = i.get("src")
 
-        if not title:
+        if not title or not image:
+            continue
+
+        # Amazon商品画像だけ通す
+        if "images-na.ssl-images-amazon.com" not in image:
+            continue
+
+        # 広告除外
+        if "Amazon" in title or "プライム" in title or "読み放題" in title:
             continue
 
         if title not in known_items:
@@ -52,7 +61,7 @@ def check_amazon():
             print("Amazon追加:", title)
 
             send_discord(
-                "Amazon wishlist追加",
+                f"🎁 Amazon Wishlist追加\n{title}",
                 AMAZON_URL,
                 image
             )
@@ -62,6 +71,8 @@ def check_gipt():
 
     options = Options()
     options.add_argument("--headless")
+    options.add_argument("--no-sandbox")
+    options.add_argument("--disable-dev-shm-usage")
 
     driver = webdriver.Chrome(options=options)
 
@@ -80,6 +91,7 @@ def check_gipt():
         if not image:
             continue
 
+        # Gi-ptの商品画像だけ
         if "product" not in image:
             continue
 
@@ -92,7 +104,7 @@ def check_gipt():
             print("Gi-pt追加:", title)
 
             send_discord(
-                "Gi-pt wishlist追加",
+                f"🎁 Gi-pt Wishlist追加",
                 GIPT_URL,
                 image
             )
