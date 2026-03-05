@@ -73,31 +73,38 @@ def check_amazon():
 
 
 def check_gipt():
-
     r = requests.get(gipt_url, headers=headers)
     soup = BeautifulSoup(r.text, "html.parser")
 
-    items = soup.select("img")
+    # GIPTの各商品が入っている「箱」をすべて取得
+    # card-body や card といったクラス名の中に情報が固まっています
+    items = soup.find_all("div", class_=["card-body", "v-card__text", "item-details"])
 
     for i in items:
-
-        name = i.get("alt")
-        img = i.get("src")
-
+        # 箱の中からテキスト（商品名）を抽出
+        name = i.get_text(strip=True)
+        
+        # もしテキストが空なら、その親要素や子要素のh5なども探す
         if not name:
+            name_tag = i.find(["h5", "p", "span"])
+            name = name_tag.get_text(strip=True) if name_tag else ""
+
+        if not name or len(name) < 2: # 短すぎるゴミデータは無視
             continue
 
+        # 画像はその箱の近くにあるものを探す
+        parent = i.find_parent()
+        img_tag = parent.find("img") if parent else None
+        img = img_tag.get("src") if img_tag else ""
+
         if name not in seen:
-
             seen.add(name)
-
             send_discord(
                 "🎁 Gi-pt Wishlist追加",
                 name,
                 gipt_url,
                 img
             )
-
 
 while True:
 
