@@ -1,11 +1,12 @@
 import requests
-from bs4 import BeautifulSoup
 import time
+from bs4 import BeautifulSoup
 
-WEBHOOK = "ここはそのまま君のWebhook"
+WEBHOOK = "https://discord.com/api/webhooks/1479095180953911469/UTGcnHjBtpOt-mErqPGlB-X0nQkbwzItuXOEr_C1LNtzq4UO_OqxGQBlbhGktRHUAIVR"
 
 amazon_url = "https://www.amazon.co.jp/hz/wishlist/ls/2HA24VTBOPMGR?ref_=wl_fv_le"
-gipt_url = "https://gi-pt.com/main/wishlist/fan-view/3a1f1c99-440f-ad66-d107-1ed83a03c5cf"
+
+gipt_url = "https://gi-pt.com/home/wishlist"
 
 headers = {
     "User-Agent": "Mozilla/5.0"
@@ -13,16 +14,15 @@ headers = {
 
 seen = set()
 
-
-def send(title, name, url, img):
+def send_discord(title, name, url, img):
 
     data = {
-        "embeds":[
+        "embeds": [
             {
                 "title": title,
                 "description": name,
                 "url": url,
-                "image":{"url": img}
+                "image": {"url": img}
             }
         ]
     }
@@ -35,29 +35,27 @@ def check_amazon():
     r = requests.get(amazon_url, headers=headers)
     soup = BeautifulSoup(r.text, "html.parser")
 
-    items = soup.select("img")
+    items = soup.select(".g-item-sortable")
 
     for i in items:
 
-        name = i.get("alt")
-        img = i.get("src")
+        name_tag = i.select_one("h2")
+        img_tag = i.select_one("img")
 
-        if not name:
+        if not img_tag:
             continue
 
-        ng = ["Amazon","広告","Prime","Audible","Mastercard"]
+        img = img_tag.get("src")
+        name = name_tag.text.strip() if name_tag else "Amazon Wishlist商品"
 
-        if any(x in name for x in ng):
-            continue
-
-        key = "amazon"+name
+        key = img
 
         if key not in seen:
 
             seen.add(key)
 
-            send(
-                "🎁 Amazon Wishlist追加",
+            send_discord(
+                "🛒 Amazon Wishlist追加",
                 name,
                 amazon_url,
                 img
@@ -69,35 +67,29 @@ def check_gipt():
     r = requests.get(gipt_url, headers=headers)
     soup = BeautifulSoup(r.text, "html.parser")
 
-    cards = soup.select("div")
+    items = soup.find_all("img")
 
-    for c in cards:
+    for i in items:
 
-        img_tag = c.find("img")
-
-        if not img_tag:
-            continue
-
-        img = img_tag.get("src")
+        img = i.get("src")
+        name = i.get("alt")
 
         if not img:
             continue
 
-        if "gipt" not in img:
+        if "wishlist" not in img and "product" not in img:
             continue
 
-        name = img_tag.get("alt")
-
         if not name:
-            name = "Gi-pt商品"
+            name = "Gi-pt Wishlist商品"
 
-        key = "gipt"+img
+        key = img
 
         if key not in seen:
 
             seen.add(key)
 
-            send(
+            send_discord(
                 "🎁 Gi-pt Wishlist追加",
                 name,
                 gipt_url,
@@ -113,7 +105,6 @@ while True:
         check_gipt()
 
     except Exception as e:
-
-        print(e)
+        print("error:", e)
 
     time.sleep(60)
