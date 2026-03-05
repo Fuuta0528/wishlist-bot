@@ -3,12 +3,13 @@ from bs4 import BeautifulSoup
 import time
 
 # ===== 設定 =====
+
 AMAZON_URL = "https://www.amazon.co.jp/hz/wishlist/ls/2HA24VTBOPMGR"
 GIPT_URL = "https://gi-pt.com/main/wishlist/fan-view/3a1f1c99-440f-ad66-d107-1ed83a03c5cf"
 
-DISCORD_WEBHOOK = "https://discord.com/api/webhooks/1479095180953911469/UTGcnHjBtpOt-mErqPGlB-X0nQkbwzItuXOEr_C1LNtzq4UO_OqxGQBlbhGktRHUAIVR"
+WEBHOOK = "https://discord.com/api/webhooks/1479095180953911469/UTGcnHjBtpOt-mErqPGlB-X0nQkbwzItuXOEr_C1LNtzq4UO_OqxGQBlbhGktRHUAIVR"
 
-CHECK_INTERVAL = 300  # 5分
+CHECK_INTERVAL = 120
 
 headers = {
     "User-Agent": "Mozilla/5.0"
@@ -21,119 +22,134 @@ seen_items = set()
 # Discord通知
 # ======================
 
-def send_discord(title, link):
+def send_discord(title, link, image):
 
-    data = {
-        "content": f"🎁 **Wishlist追加**\n{title}\n{link}"
+    embed = {
+        "title": "🎁 Wishlist追加",
+        "description": f"[{title}]({link})",
+        "color": 5763719
     }
 
-    requests.post(DISCORD_WEBHOOK, json=data)
+    if image:
+        embed["image"] = {"url": image}
+
+    data = {
+        "embeds": [embed]
+    }
+
+    requests.post(WEBHOOK, json=data)
 
 
 # ======================
-# Amazonチェック
+# Amazon取得
 # ======================
 
 def check_amazon():
 
-    try:
+    results = []
 
-        r = requests.get(AMAZON_URL, headers=headers)
-        soup = BeautifulSoup(r.text, "html.parser")
+    r = requests.get(AMAZON_URL, headers=headers)
+    soup = BeautifulSoup(r.text, "html.parser")
 
-        items = soup.select("div.g-item-sortable")
+    items = soup.select("div.g-item-sortable")
 
-        results = []
+    for item in items:
 
-        for item in items:
+        title_tag = item.select_one("h2")
 
-            title_tag = item.select_one("h2 a")
+        if not title_tag:
+            continue
 
-            if not title_tag:
-                continue
+        title = title_tag.text.strip()
 
-            title = title_tag.text.strip()
+        # 広告除外
+        if "プライム" in title:
+            continue
 
-            # 不要通知除外
-            if "プライム会員" in title:
-                continue
+        if "Mastercard" in title:
+            continue
 
-            if "Amazon Mastercard" in title:
-                continue
+        link_tag = item.select_one("a")
 
-            link = "https://www.amazon.co.jp" + title_tag["href"]
+        if not link_tag:
+            continue
 
-            results.append((title, link))
+        link = "https://www.amazon.co.jp" + link_tag["href"]
 
-        return results
+        img_tag = item.select_one("img")
 
-    except Exception as e:
-        print("Amazon error:", e)
-        return []
+        image = None
+
+        if img_tag:
+            image = img_tag.get("src")
+
+        results.append((title, link, image))
+
+    return results
 
 
 # ======================
-# GIPTチェック
+# GIPT取得
 # ======================
 
 def check_gipt():
 
-    try:
+    results = []
 
-        r = requests.get(GIPT_URL, headers=headers)
-        soup = BeautifulSoup(r.text, "html.parser")
+    r = requests.get(GIPT_URL, headers=headers)
+    soup = BeautifulSoup(r.text, "html.parser")
 
-        items = soup.select("a")
+    links = soup.select("a")
 
-        results = []
+    for a in links:
 
-        for item in items:
+        title = a.text.strip()
 
-            title = item.text.strip()
+        if len(title) < 8:
+            continue
 
-            if len(title) < 8:
-                continue
+        link = a.get("href")
 
-            link = item.get("href")
+        if not link:
+            continue
 
-            if not link:
-                continue
+        if not link.startswith("http"):
+            continue
 
-            if "http" not in link:
-                continue
+        results.append((title, link, None))
 
-            results.append((title, link))
-
-        return results
-
-    except Exception as e:
-        print("GIPT error:", e)
-        return []
+    return results
 
 
 # ======================
-# メイン監視
+# 監視ループ
 # ======================
 
 while True:
 
     print("チェック開始")
 
-    amazon_items = check_amazon()
-    gipt_items = check_gipt()
+    try:
 
-    all_items = amazon_items + gipt_items
+        amazon_items = check_amazon()
+        gipt_items = check_gipt()
 
-    for title, link in all_items:
+        all_items = amazon_items + gipt_items
 
-        uid = title + link
+        for title, link, image in all_items:
 
-        if uid not in seen_items:
+            uid = title + link
 
-            seen_items.add(uid)
+            if uid not in seen_items:
 
-            print("新規:", title)
+                seen_items.add(uid)
 
-            send_discord(title, link)
+                print("新商品:", title)
+
+                send_discord(title, link, image)
+
+    except Exception as e:
+
+        print("error:", e)
 
     time.sleep(CHECK_INTERVAL)
