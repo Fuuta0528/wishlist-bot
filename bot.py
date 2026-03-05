@@ -73,38 +73,41 @@ def check_amazon():
 
 
 def check_gipt():
-    r = requests.get(gipt_url, headers=headers)
-    soup = BeautifulSoup(r.text, "html.parser")
+    # ブラウザが裏でデータを取ってきている「本当のデータ置き場」を叩きます
+    # URL末尾のID部分はあなたの指定したものに固定しています
+    api_url = "https://gi-pt.com/api/v1/wishlist/fan-view/3a1f1c99-440f-ad66-d107-1ed83a03c5cf"
+    
+    try:
+        # データを取得（GIPTのサーバーから直接JSONという形式でデータをもらいます）
+        r = requests.get(api_url, headers=headers, timeout=15)
+        data = r.json() # HTMLではなく「データの塊」として読み込む
 
-    # GIPTの各商品が入っている「箱」をすべて取得
-    # card-body や card といったクラス名の中に情報が固まっています
-    items = soup.find_all("div", class_=["card-body", "v-card__text", "item-details"])
+        # 商品リスト（wishlist_items）の中身をループで回す
+        # GIPTのデータ構造: data['data']['wishlist_items']
+        items = data.get('data', {}).get('wishlist_items', [])
 
-    for i in items:
-        # 箱の中からテキスト（商品名）を抽出
-        name = i.get_text(strip=True)
-        
-        # もしテキストが空なら、その親要素や子要素のh5なども探す
-        if not name:
-            name_tag = i.find(["h5", "p", "span"])
-            name = name_tag.get_text(strip=True) if name_tag else ""
+        for item in items:
+            # 商品名を取得
+            name = item.get('product_name') or item.get('name')
+            if not name:
+                continue
 
-        if not name or len(name) < 2: # 短すぎるゴミデータは無視
-            continue
+            # 画像URLを取得
+            img = item.get('image_url') or ""
+            
+            # 商品の個別IDや名前をキーにして重複チェック
+            key = f"gipt-{name}"
 
-        # 画像はその箱の近くにあるものを探す
-        parent = i.find_parent()
-        img_tag = parent.find("img") if parent else None
-        img = img_tag.get("src") if img_tag else ""
-
-        if name not in seen:
-            seen.add(name)
-            send_discord(
-                "🎁 Gi-pt Wishlist追加",
-                name,
-                gipt_url,
-                img
-            )
+            if key not in seen:
+                seen.add(key)
+                send_discord(
+                    "🎁 Gi-pt Wishlist追加",
+                    name,
+                    gipt_url, # 通知用URLは元のページURL
+                    img
+                )
+    except Exception as e:
+        print(f"GIPTチェック中にエラー: {e}")
 
 while True:
 
