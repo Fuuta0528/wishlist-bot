@@ -1,122 +1,74 @@
 import requests
-from bs4 import BeautifulSoup
 import time
+from bs4 import BeautifulSoup
+from selenium import webdriver
+from selenium.webdriver.chrome.service import Service
+from selenium.webdriver.chrome.options import Options
+from webdriver_manager.chrome import ChromeDriverManager
 
 WEBHOOK = "https://discord.com/api/webhooks/1479095180953911469/UTGcnHjBtpOt-mErqPGlB-X0nQkbwzItuXOEr_C1LNtzq4UO_OqxGQBlbhGktRHUAIVR"
-
 amazon_url = "https://www.amazon.co.jp/hz/wishlist/ls/2HA24VTBOPMGR"
 gipt_url = "https://gi-pt.com/main/wishlist/fan-view/3a1f1c99-440f-ad66-d107-1ed83a03c5cf"
 
 seen = set()
-
-headers = {
-    "User-Agent": "Mozilla/5.0"
-}
+headers = {"User-Agent": "Mozilla/5.0"}
 
 def send_discord(title, name, url, img):
-
     data = {
-        "embeds": [
-            {
-                "title": title,
-                "description": name,
-                "url": url,
-                "image": {
-                    "url": img
-                }
-            }
-        ]
+        "embeds": [{"title": title, "description": name, "url": url, "image": {"url": img}}]
     }
-
     requests.post(WEBHOOK, json=data)
 
-
 def check_amazon():
-
+    # Amazonは今の「動いているやり方」を維持
     r = requests.get(amazon_url, headers=headers)
     soup = BeautifulSoup(r.text, "html.parser")
-
     items = soup.select("img")
-
     for i in items:
-
         name = i.get("alt")
         img = i.get("src")
-
-        if not name:
-            continue
-
-        # Amazon広告排除
-        ng = [
-            "Amazon",
-            "Prime",
-            "Mastercard",
-            "スポンサー",
-            "おすすめ",
-            "広告",
-            "Audible"
-        ]
-
-        if any(word in name for word in ng):
-            continue
-
+        if not name: continue
+        ng = ["Amazon", "Prime", "Mastercard", "スポンサー", "おすすめ", "広告", "Audible"]
+        if any(word in name for word in ng): continue
         if name not in seen:
-
             seen.add(name)
-
-            send_discord(
-                "🎁 Amazon Wishlist追加",
-                name,
-                amazon_url,
-                img
-            )
-
+            send_discord("🎁 Amazon Wishlist追加", name, amazon_url, img)
 
 def check_gipt():
-    # ブラウザが裏でデータを取ってきている「本当のデータ置き場」を叩きます
-    # URL末尾のID部分はあなたの指定したものに固定しています
-    api_url = "https://gi-pt.com/api/v1/wishlist/fan-view/3a1f1c99-440f-ad66-d107-1ed83a03c5cf"
+    # GIPTだけ「ブラウザ」を使って、読み込みを待つ
+    options = Options()
+    options.add_argument('--headless') # 画面を表示しない
+    driver = webdriver.Chrome(service=Service(ChromeDriverManager().install()), options=options)
     
     try:
-        # データを取得（GIPTのサーバーから直接JSONという形式でデータをもらいます）
-        r = requests.get(api_url, headers=headers, timeout=15)
-        data = r.json() # HTMLではなく「データの塊」として読み込む
-
-        # 商品リスト（wishlist_items）の中身をループで回す
-        # GIPTのデータ構造: data['data']['wishlist_items']
-        items = data.get('data', {}).get('wishlist_items', [])
-
-        for item in items:
-            # 商品名を取得
-            name = item.get('product_name') or item.get('name')
-            if not name:
+        driver.get(gipt_url)
+        time.sleep(7) # 商品が出るまで長めに待つ（ここがキモ！）
+        
+        soup = BeautifulSoup(driver.page_source, "html.parser")
+        # GIPTの構造に合わせて「h5タグ（商品名）」を探す
+        items = soup.find_all("h5")
+        
+        for n in items:
+            name = n.get_text(strip=True)
+            if not name or name in seen:
                 continue
-
-            # 画像URLを取得
-            img = item.get('image_url') or ""
             
-            # 商品の個別IDや名前をキーにして重複チェック
-            key = f"gipt-{name}"
+            # 画像を取得（h5の近くのimgを探す）
+            parent = n.find_parent("div")
+            img_tag = parent.find("img") if parent else None
+            img = img_tag.get("src") if img_tag else ""
+            
+            seen.add(name)
+            send_discord("🎁 Gi-pt Wishlist追加", name, gipt_url, img)
+            print(f"GIPT検知: {name}")
+    finally:
+        driver.quit() # ブラウザを閉じる
 
-            if key not in seen:
-                seen.add(key)
-                send_discord(
-                    "🎁 Gi-pt Wishlist追加",
-                    name,
-                    gipt_url, # 通知用URLは元のページURL
-                    img
-                )
-    except Exception as e:
-        print(f"GIPTチェック中にエラー: {e}")
-
+# 監視ループ
 while True:
-
     try:
-
-        check_amazon()
-        check_gipt()
-
+        check_amazon() # 爆速
+        check_gipt()   # ブラウザでじっくり
     except Exception as e:
         print("error:", e)
-
     time.sleep(60)
