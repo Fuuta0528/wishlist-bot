@@ -7,45 +7,33 @@ WEBHOOK = "https://discord.com/api/webhooks/1479095180953911469/UTGcnHjBtpOt-mEr
 
 # 監視するURL
 URLS = [
-    "https://www.amazon.co.jp/hz/wishlist/ls/2HA24VTBOPMGR?ref_=wl_fv_le",
+    "https://www.amazon.co.jp/hz/wishlist/ls/2HA24VTBOPMGR",
     "https://gi-pt.com/main/wishlist/fan-view/3a1f1c99-440f-ad66-d107-1ed83a03c5cf"
 ]
 
-old_items = set()
+seen = set()
 
-def send_discord(msg):
+def send(msg):
     requests.post(WEBHOOK, json={"content": msg})
 
-def get_items(url):
-    try:
-        r = requests.get(url)
-        soup = BeautifulSoup(r.text, "html.parser")
-
-        items = []
-        for a in soup.find_all("a"):
-            text = a.text.strip()
-            if len(text) > 10:
-                items.append(text)
-
-        return set(items)
-
-    except:
-        return set()
-
-while True:
-
-    new_items = set()
+def check():
+    global seen
 
     for url in URLS:
-        new_items |= get_items(url)
+        r = requests.get(url, headers={"User-Agent":"Mozilla/5.0"})
+        soup = BeautifulSoup(r.text,"html.parser")
 
-    diff = new_items - old_items
+        items = soup.find_all("img")
 
-    if diff:
-        send_discord("🎁 Wishlist更新！")
-        for item in diff:
-            send_discord(item)
+        for i in items:
+            name = i.get("alt")
 
-    old_items = new_items
+            if name and name not in seen:
+                seen.add(name)
 
-    time.sleep(300)
+                msg = f"🎁 Wishlistに追加！\n{name}\n{url}"
+                send(msg)
+
+while True:
+    check()
+    time.sleep(60)
