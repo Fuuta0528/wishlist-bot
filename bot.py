@@ -1,6 +1,21 @@
 import requests
 import time
 from bs4 import BeautifulSoup
+import os
+import threading
+from http.server import SimpleHTTPRequestHandler, HTTPServer
+
+# ==================== Render用：タイムアウト防止のダミー窓口 ====================
+def run_dummy_server():
+    # Renderが指定するポート（窓口の番号）を取得（なければ10000番）
+    port = int(os.environ.get("PORT", 10000))
+    server_address = ("", port)
+    # 接続が来たら200 OKを返すだけの超簡単なサーバー
+    httpd = HTTPServer(server_address, SimpleHTTPRequestHandler)
+    print(f"🤖 Render用の窓口をポート {port} で開けました。タイムアウトを防ぎます。")
+    httpd.serve_forever()
+
+# ==================== メインのボット処理 ====================
 
 # DiscordのWebhook URL
 WEBHOOK = "https://discord.com/api/webhooks/1479095180953911469/UTGcnHjBtpOt-mErqPGlB-X0nQkbwzItuXOEr_C1LNtzq4UO_OqxGQBlbhGktRHUAIVR"
@@ -51,7 +66,7 @@ def check_amazon(is_first=False):
 
             if img not in seen:
                 seen.add(img)
-                # 初回起動時（is_first=True）は通知を飛ばさず、2回目以降の「新商品」だけ通知する
+                # 初回起動時は通知を飛ばさず、2回目以降の「新商品」だけ通知する
                 if not is_first:
                     send_discord("🎁なるるwishlist (Amazon)", name, amazon_url, img)
     except Exception as e:
@@ -81,7 +96,7 @@ def check_gipt(is_first=False):
 
             if img not in seen:
                 seen.add(img)
-                # 初回起動時は通知を飛ばさず、2回目以降の「新商品」だけ通知する（大量通知バグ対策）
+                # 初回起動時は通知を飛ばさず、2回目以降の「新商品」だけ通知する
                 if not is_first:
                     send_discord(
                         "🎁大好きな配信者のgipt",
@@ -94,6 +109,9 @@ def check_gipt(is_first=False):
 
 # ==================== メイン処理 ====================
 if __name__ == "__main__":
+    # 1. 最初に裏側でRender用のダミーサーバーを起動（これでFailedを防ぐわ！）
+    threading.Thread(target=run_dummy_server, daemon=True).start()
+
     print("==========================================")
     print("   Amazon ＆ gipt 同時監視ボット 起動完了   ")
     print("==========================================")
